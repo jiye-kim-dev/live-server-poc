@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: live-config
+    restart: unless-stopped
+    network_mode: host   # RTSP UDP 포트 문제로 host 모드 권장
+    volumes:
+      - ./config/config.yml:/config.yml
+    environment:
+      - MTX_LOGLEVEL=info
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:9997/v3/paths/list" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 중복재생을 차단하거나 스트림 등 관리하는 어플리케이션 (Go)
+  go-server:
+    build: ./go-server
+    container_name: live-go-server
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

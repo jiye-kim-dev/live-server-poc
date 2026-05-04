@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>live-server-poc · player</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #111;
+            --border: #222;
+            --border-active: #444;
+            --accent: #00e5ff;
+            --accent-dim: rgba(0, 229, 255, 0.08);
+            --text: #e8e8e8;
+            --text-dim: #555;
+            --text-muted: #333;
+            --red: #ff4444;
+            --green: #00e676;
+            --mono: 'IBM Plex Mono', monospace;
+            --sans: 'IBM Plex Sans', sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── header ── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            font-family: var(--mono);
+            font-size: 13px;
+            color: var(--text-dim);
+            letter-spacing: 0.05em;
+        }
+
+        .logo span { color: var(--accent); }
+
+        .badge {
+            font-family: var(--mono);
+            font-size: 10px;
+            padding: 3px 8px;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            letter-spacing: 0.1em;
+        }
+
+        /* ── main layout ── */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 0;
+            height: calc(100vh - 53px);
+        }
+
+        /* ── video area ── */
+        .video-area {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+        }
+
+        .video-wrap {
+            flex: 1;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: none;
+        }
+
+        .overlay-icon {
+            font-size: 40px;
+            opacity: 0.15;
+        }
+
+        .overlay-text {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 0.1em;
+        }
+
+        /* status bar */
+        .status-bar {
+            padding: 10px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .dot.live { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 1.5s infinite; }
+        .dot.ready { background: var(--green); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* ── sidebar ── */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .section {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-label {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.12em;
+            margin-bottom: 14px;
+        }
+
+        /* form */
+        .field { margin-bottom: 12px; }
+
+        .field label {
+            display: block;
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            letter-spacing: 0.08em;
+        }
+
+        .field input {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 12px;
+            padding: 8px 10px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .field input:focus { border-color: var(--border-active); }
+        .field input::placeholder { color: var(--text-muted); }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            border: none;
+            transition: all 0.15s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #000;
+            font-weight: 500;
+        }
+
+        .btn-primary:hover { background: #33eaff; }
+        .btn-primary:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            margin-top: 8px;
+        }
+
+        .btn-secondary:hover { border-color: var(--border-active); color: var(--text); }
+
+        /* stream url display */
+        .url-display {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 8px 10px;
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            word-break: break-all;
+            line-height: 1.5;
+            min-height: 36px;
+        }
+
+        /* log */
+        .log {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .log-label {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.12em;
+            margin-bottom: 10px;
+        }
+
+        .log-entries {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-entry {
+            font-family: var(--mono);
+            font-size: 10px;
+            line-height: 1.5;
+            display: flex;
+            gap: 8px;
+        }
+
+        .log-time { color: var(--text-muted); flex-shrink: 0; }
+        .log-msg { color: var(--text-dim); }
+        .log-msg.ok { color: var(--green); }
+        .log-msg.err { color: var(--red); }
+        .log-msg.info { color: var(--accent); }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">live-server-<span>poc</span></div>
+    <div class="badge">LL-HLS PLAYER</div>
+</header>
+
+<main>
+    <!-- 비디오 영역 -->
+    <div class="video-area">
+        <div class="video-wrap">
+            <video id="video" controls playsinline></video>
+            <div class="video-overlay" id="overlay">
+                <div class="overlay-icon">▶</div>
+                <div class="overlay-text">NO SIGNAL</div>
+            </div>
+        </div>
+        <div class="status-bar">
+            <div class="dot" id="statusDot"></div>
+            <span id="statusText">대기 중</span>
+            <span style="margin-left:auto" id="latencyText"></span>
+        </div>
+    </div>
+
+    <!-- 사이드바 -->
+    <div class="sidebar">
+        <div class="section">
+            <div class="section-label">STREAM CONFIG</div>
+
+            <div class="field">
+                <label>HOST</label>
+                <input id="host" type="text" value="localhost" placeholder="localhost" />
+            </div>
+            <div class="field">
+                <label>PORT</label>
+                <input id="port" type="text" value="8888" placeholder="8888" />
+            </div>
+            <div class="field">
+                <label>APP NAME</label>
+                <input id="appName" type="text" value="live" placeholder="live" />
+            </div>
+            <div class="field">
+                <label>STREAM KEY</label>
+                <input id="streamKey" type="text" placeholder="abc123" />
+            </div>
+            <div class="field">
+                <label>TOKEN (DRM)</label>
+                <input id="token" type="text" placeholder="선택 사항" />
+            </div>
+            <div class="field">
+                <label>USER ID (중복재생 차단)</label>
+                <input id="userId" type="text" placeholder="user1" />
+            </div>
+
+            <div class="field">
+                <label>STREAM URL</label>
+                <div class="url-display" id="urlDisplay">—</div>
+            </div>
+
+            <button class="btn btn-primary" id="playBtn" onclick="startPlay()">▶ PLAY</button>
+            <button class="btn btn-secondary" id="stopBtn" onclick="stopPlay()" disabled>■ STOP</button>
+        </div>
+
+        <!-- 로그 -->
+        <div class="log">
+            <div class="log-label">EVENT LOG</div>
+            <div class="log-entries" id="logEntries"></div>
+        </div>
+    </div>
+</main>
+
+<script>
+    let hls = null;
+
+    // URL 미리보기
+    ['host','port','appName','streamKey','token','userId'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateURLPreview);
+    });
+
+    function buildURL() {
+        const host     = document.getElementById('host').value || 'localhost';
+        const port     = document.getElementById('port').value || '8888';
+        const appName  = document.getElementById('appName').value || 'live';
+        const key      = document.getElementById('streamKey').value;
+        const token    = document.getElementById('token').value;
+        const userId   = document.getElementById('userId').value;
+
+        if (!key) return null;
+
+        let url = `http://${host}:${port}/${appName}/${key}/index.m3u8`;
+        const params = [];
+        if (token)  params.push(`token=${encodeURIComponent(token)}`);
+        if (userId) params.push(`userID=${encodeURIComponent(userId)}`);
+        if (params.length) url += '?' + params.join('&');
+        return url;
+    }
+
+    function updateURLPreview() {
+        const url = buildURL();
+        document.getElementById('urlDisplay').textContent = url || '—';
+    }
+
+    function log(msg, type = '') {
+        const entries = document.getElementById('logEntries');
+        const now = new Date().toTimeString().slice(0, 8);
+        const el = document.createElement('div');
+        el.className = 'log-entry';
+        el.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${type}">${msg}</span>`;
+        entries.prepend(el);
+        // 최대 50줄
+        while (entries.children.length > 50) entries.lastChild.remove();
+    }
+
+    function setStatus(state) {
+        const dot  = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        dot.className = 'dot';
+        if (state === 'live')  { dot.classList.add('live');  text.textContent = 'LIVE'; }
+        if (state === 'ready') { dot.classList.add('ready'); text.textContent = '재생 준비'; }
+        if (state === 'idle')  { text.textContent = '대기 중'; }
+        if (state === 'error') { text.textContent = '오류'; }
+    }
+
+    function startPlay() {
+        const url = buildURL();
+        if (!url) { log('스트림 키를 입력하세요', 'err'); return; }
+
+        stopPlay();
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('playBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+
+        log(`연결 시도: ${url}`, 'info');
+
+        const video = document.getElementById('video');
+
+        if (Hls.isSupported()) {
+            hls = new Hls({
+                lowLatencyMode: true,
+                backBufferLength: 4,
+            });
+
+            hls.loadSource(url);
+            hls.attachMedia(video);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                log('매니페스트 파싱 완료', 'ok');
+                setStatus('ready');
+                video.play().catch(e => log(`재생 오류: ${e.message}`, 'err'));
+            });
+
+            hls.on(Hls.Events.LEVEL_LOADED, (_, data) => {
+                if (data.details.live) setStatus('live');
+            });
+
+            hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
+                const latency = data.frag.stats.loading.end - data.frag.stats.loading.start;
+                document.getElementById('latencyText').textContent = `${latency.toFixed(0)}ms`;
+            });
+
+            hls.on(Hls.Events.ERROR, (_, data) => {
+                if (data.fatal) {
+                    log(`치명적 오류: ${data.type} / ${data.details}`, 'err');
+                    setStatus('error');
+                    stopPlay();
+                } else {
+                    log(`오류: ${data.details}`, 'err');
+                }
+            });
+
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safari 네이티브 HLS
+            video.src = url;
+            video.addEventListener('loadedmetadata', () => {
+                log('Safari 네이티브 HLS', 'info');
+                setStatus('ready');
+                video.play();
+            });
+        } else {
+            log('HLS를 지원하지 않는 브라우저입니다', 'err');
+        }
+    }
+
+    function stopPlay() {
+        if (hls) {
+            hls.destroy();
+            hls = null;
+        }
+        const video = document.getElementById('video');
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+
+        document.getElementById('overlay').style.display = 'flex';
+        document.getElementById('playBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('latencyText').textContent = '';
+        setStatus('idle');
+        log('재생 중지');
+    }
+
+    // 초기 URL 미리보기
+    updateURLPreview();
+</script>
+
+</body>
+</html>
