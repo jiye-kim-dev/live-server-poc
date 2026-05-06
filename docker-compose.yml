@@ -1,13 +1,25 @@
 version: "3.9"
 
+networks:
+  live-net:
+    driver: bridge
+
 services:
   mediamtx:
     image: bluenviron/mediamtx:latest
     container_name: live-config
     restart: unless-stopped
-    network_mode: host   # RTSP UDP 포트 문제로 host 모드 권장
+    networks:
+      - live-net
+    ports:
+      - "1935:1935"     # RTMP
+      - "8888:8888"     # HLS
+      - "8889:8889"     # WebRTC
+      - "8890:8890/udp" # SRT
+      - "9997:9997"     # Control API
+      - "9998:9998"     # Metrics
     volumes:
-      - ./config/config.yml:/config.yml
+      - ./config/mediamtx.yml:/mediamtx.yml
     environment:
       - MTX_LOGLEVEL=info
     healthcheck:
@@ -16,11 +28,12 @@ services:
       timeout: 5s
       retries: 3
 
-  # 중복재생을 차단하거나 스트림 등 관리하는 어플리케이션 (Go)
   go-server:
-    build: ./go-server
+    build: .
     container_name: live-go-server
     restart: unless-stopped
+    networks:
+      - live-net
     ports:
       - "8085:8085"
     env_file:

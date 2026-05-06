@@ -17,7 +17,7 @@ hlsAlwaysRemux: yes
 # LL-HLS 활성화
 hlsVariant: lowLatency
 # 세그먼트 개수 (LL-HLS 권장 6 이상)
-hlsSegmentCount: 6
+hlsSegmentCount: 7
 # 세그먼트 길이 (LL-HLS 권장 2s 이하)
 hlsSegmentDuration: 2s
 # Part 길이 (LL-HLS 핵심: 세그먼트를 잘게 쪼갬)
@@ -31,6 +31,24 @@ webrtcAddress: :8889
 api: yes
 apiAddress: :9997
 
+# 인증 설정
+# API는 내부 네트워크에서 접근 허용
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+        path:
+      - action: read
+        path:
+      - action: playback
+        path:
+      - action: api
+        path:
+      - action: metrics
+        path:
+
 # Prometheus metric
 metrics: yes
 metricsAddress: :9998
@@ -38,18 +56,8 @@ metricsAddress: :9998
 # 해당 이벤트 발생할때마다 사용할 스크립트 지정 가능
 # 일단 샘플로 임의 등록 해놓고 나중에 구현하면 바꾸는걸로
 pathDefaults:
-  # 방송시작
-  runOnPublish: >
-    curl -sf -X POST
-    http://go-server:8085/event/publish
-    -H "Content-Type: application/json"
-    -d "{\"path\":\"$MTX_PATH\",\"protocol\":\"$MTX_QUERY\"}"
-  # 방송종료
-  runOnUnpublish: >
-    curl -sf -X POST
-    http://go-server:8085/event/unpublish
-    -H "Content-Type: application/json"
-    -d "{\"path\":\"$MTX_PATH\"}"
+  runOnReady: 'curl -sf -X POST http://host.docker.internal:8085/event/publish -H "Content-Type: application/json" -d "{\"path\":\"$MTX_PATH\",\"protocol\":\"$MTX_QUERY\"}"'
+  runOnNotReady: 'curl -sf -X POST http://host.docker.internal:8085/event/unpublish -H "Content-Type: application/json" -d "{\"path\":\"$MTX_PATH\"}"'
 
 # 기존 포워더 서버 만들었을때 경험을 떠올려보면, path 는 api 통해서 stream key 랑 application name 을 발급 받은 후 그 키로만 방송할 수 있는 구조였음
 # 따라서, 키 검증을 위한 API 호출이 필요하므로 일단 요청건은 다 받고 판단 후 승인/거절 프로세스가 될듯함
